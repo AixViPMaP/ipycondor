@@ -10,6 +10,7 @@ from .Qgrid import to_qgrid
 from .JobParser import JobParser
 from .MachineParser import MachineParser
 
+from IPython.display import display, clear_output
 import ipywidgets as widgets
 
 from subprocess import Popen, PIPE
@@ -98,12 +99,11 @@ class Condor(object):
         return tab
 
     def dashboard(self):
-        from IPython.display import display, clear_output
         output = widgets.Output()
         def refresh(button):
             with output:
-                index = button.tab.selected_index if hasattr(button,'tab') else 0
-                button.tab = self.tab()
+                index = button.tab.selected_index if hasattr(button, 'tab') else 0
+                button.tab = self.tabs()
                 button.tab.selected_index = index
                 display(button.tab)
                 clear_output(wait=True)
