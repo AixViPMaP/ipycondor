@@ -20,10 +20,6 @@ def _load_magic():
     ip = get_ipython()
     ip.register_magics(CondorMagics)
 
-class Table(object):
-    def __init__(self, func):
-        self.func=func
-
 _tabs = []
 def tab(title=""):
     def _wrapper(factory):
