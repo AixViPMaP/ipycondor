@@ -7,7 +7,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ipycondor',
-    version='0.0.1',
+    version='0.0.2',
     description='IPython binding for HTCondor',
     author='Lukas Koschmieder, Mingxuan Lin',
     license='GPL',

@@ -22,6 +22,7 @@ class BaseParser(object):
     """
     Sample usage:
         class ClassAdParser(BaseParser):
+            # This is a simple rule which will match the attribute name `JobStatus`
             @rule
             def JobStatus(v):
                 lookuptable=['Idle','Running','Removed','Completed','Held','Transferring Output']
@@ -48,10 +49,21 @@ class BaseParser(object):
                     self.__simple_rules[attr.func.__name__.lower()]=attr.func
 
     def parse(self, clsad, key):
+        """
+        Parse the value of the named attribute of a ClassAd object `clsad[key]`.
+
+        :param clsad: the ClassAd object to be parsed
+        :type  clsad: ClassAd
+        :param key: name of the attribute
+        :type  key: string
+        :rtype: string
+        """
         value = clsad.get(key, None)
         srule=self.__simple_rules.get(key.lower(), None)
         if srule:
                 value = _safe_call( srule, value , key , clsad)
+                if value:
+                    return value
         for pt, srule in self.__re_rules:
             if pt.match(key):
                 value = _safe_call( srule, value , key , clsad)

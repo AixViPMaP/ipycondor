@@ -17,8 +17,11 @@ from subprocess import Popen, PIPE
 import os, time
 
 def _load_magic():
-    ip = get_ipython()
-    ip.register_magics(CondorMagics)
+    try:
+        ip = get_ipython()
+        ip.register_magics(CondorMagics)
+    except:
+        pass
 
 _tabs = []
 def tab(title=""):
