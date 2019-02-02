@@ -1,7 +1,9 @@
 # Copyright 2019 Lukas Koschmieder, Mingxuan Lin
 
-from .Condor import Condor, htcondor, TabView
+from .Condor import Condor, htcondor, TabView, CondorMagics
 import re
+from IPython.core.magic import (Magics, magics_class, line_magic,
+                                cell_magic, line_cell_magic)
 
 class AixViPMaP(Condor):
     def __init__(self, *args):
@@ -28,3 +30,12 @@ class AixViPMaP(Condor):
             self.apps, None,
             ['App', 'Version', 'Machine'],
             ['App', 'Version'])).root_widget
+
+class AixVPMagic(CondorMagics):
+    @property
+    def condor(self):
+        c = getattr(self,'_condor', None)
+        if not isinstance(c, Condor):
+            c = AixViPMaP()
+            self._condor = c
+        return c
