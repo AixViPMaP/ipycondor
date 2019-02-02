@@ -1,11 +1,16 @@
-# Copyright 2019 Lukas Koschmieder
+# Copyright 2019 Lukas Koschmieder, Mingxuan Lin
 
-from .Condor import *
+from .Condor import Condor, htcondor, TabView
 import re
 
 class AixViPMaP(Condor):
-    @tab("Apps")
-    def app_table(self):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self._table_layout = [("Jobs", self.job_table),
+                              ("Machines", self.machine_table),
+                              ("Apps", self.app_table)]
+    def apps(self, constraint=None):
+        # the argument `constrain` is ignored
         machines = self.coll.query(htcondor.AdTypes.Startd, constraint='SlotID==1')
         apps = []
         for machine in machines:
@@ -15,6 +20,11 @@ class AixViPMaP(Condor):
                         apps.append((app.groups()[0].replace('_', ' '),
                                      app.groups()[1].replace('_', '.'),
                                      machine['Machine']))
-        return to_qgrid(data=list(set(apps)),
-                        columns=['App', 'Version', 'Machine'],
-                        index=['App', 'Version'])
+        return [ dict(zip(['App', 'Version', 'Machine'], a)) for a in set(apps) ]
+
+    def app_table(self):
+        col_N_ind=()
+        return TabView(self._wrap_tab_hdl(
+            self.apps, None,
+            ['App', 'Version', 'Machine'],
+            ['App', 'Version'])).root_widget

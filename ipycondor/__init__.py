@@ -1,6 +1,11 @@
+# Copyright 2019 Mingxuan Lin
 # Copyright 2019 Lukas Koschmieder
-# Copyright 2018 Mingxuan Lin
 
+from .Condor import CondorMagics, Condor
 from .AixViPMaP import AixViPMaP
-from .Condor import _load_magic, Condor
-_load_magic()
+
+try:
+    ip = get_ipython()
+    ip.register_magics(CondorMagics)
+except:
+    pass
