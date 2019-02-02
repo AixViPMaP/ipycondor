@@ -141,8 +141,8 @@ class QueryParser(BaseParser):
 
     @rule(r'\w*(Memory)$')
     def mbyte2human(value):
-        _naturalsize(value, 1024*1024 )
+        return _naturalsize(value, 1024*1024 )
 
     @rule(r'\w*(Disk)$')
     def kbyte2human(value):
-        _naturalsize(value, 1024 )
+        return _naturalsize(value, 1024 )

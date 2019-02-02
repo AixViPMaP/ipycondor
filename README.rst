@@ -2,7 +2,8 @@
 ipycondor
 *********
 
-IPython binding for HTCondor
+``ipycondor`` provides ``IPython`` interfaces for `HTCondor <https://research.cs.wisc.edu/htcondor/index.html>`_ and its native python bindings. 
+Users can submit, monitor and manage condor jobs with a graphical user interface (GUI) backed by `ipywidgets <https://github.com/jupyter-widgets/ipywidgets>`_. It also support the creation of a `ipyparallel <https://github.com/ipython/ipyparallel>`_ cluster as a condor job running on remote execute nodes with SSH tunneling for communication between ipython engines and the controller.
 
 Install
 *******
@@ -27,7 +28,7 @@ For using the ``IPython`` magics, please insert the following line in the ipytho
 IPCluster
 ---------
 
-For using the ``IPClusterEngines`` launcher, the ipcluster profile should be manually configurated: 
+For using the condor launcher for ``IPClusterEngines`` , the ipcluster profile should be manually configurated: 
 
 1. Insert the following line into ``<your_profile_dir>/ip_cluster_config.py``
 
