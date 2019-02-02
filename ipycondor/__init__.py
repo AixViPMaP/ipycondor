@@ -1,4 +1,9 @@
-# Copyright 2018 Mingxuan Lin
+# Copyright 2019 Mingxuan Lin
 
-from .Condor import _load_magic, Condor
-_load_magic()
+from .Condor import CondorMagics, Condor
+
+try:
+    ip = get_ipython()
+    ip.register_magics(CondorMagics)
+except:
+    pass

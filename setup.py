@@ -7,12 +7,12 @@ from setuptools import setup, find_packages
 
 setup(
     name='ipycondor',
-    version='0.0.2',
+    version='0.0.3',
     description='IPython binding for HTCondor',
-    author='Lukas Koschmieder, Mingxuan Lin',
+    author='Mingxuan Lin, Lukas Koschmieder',
     license='GPL',
     packages=['ipycondor'],
-    requires=['six'],
+    requires=['six', 'pandas', 'qgrid'],
     url='https://github.com/AixViPMaP/ipycondor',
     use_2to3=True,
     include_package_data=True,

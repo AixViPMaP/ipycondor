@@ -1,3 +1,5 @@
+# Copyright 2019 Mingxuan Lin
+
 from ipyparallel.apps.launcher import HTCondorLauncher, BatchClusterAppMixin
 from traitlets import (
     Any, Integer, CFloat, List, Unicode, Dict, Instance, HasTraits, CRegExp, TraitError, validate, default, observe
