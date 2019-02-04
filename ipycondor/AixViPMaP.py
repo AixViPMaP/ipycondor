@@ -13,7 +13,8 @@ class AixViPMaP(Condor):
                               ("Apps", self.app_table)]
     def apps(self, constraint=None):
         # the argument `constrain` is ignored
-        machines = self.coll.query(htcondor.AdTypes.Startd, constraint='SlotID==1')
+        constraint='SlotID==1||SlotID=="1_1"'
+        machines = self.coll.query(htcondor.AdTypes.Startd, constraint=constraint)
         apps = []
         for machine in machines:
             for keyword in machine:
@@ -25,7 +26,6 @@ class AixViPMaP(Condor):
         return [ dict(zip(['App', 'Version', 'Machine'], a)) for a in set(apps) ]
 
     def app_table(self):
-        col_N_ind=()
         return TabView(self._wrap_tab_hdl(
             self.apps, None,
             ['App', 'Version', 'Machine'],
