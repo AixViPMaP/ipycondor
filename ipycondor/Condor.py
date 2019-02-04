@@ -88,7 +88,7 @@ class JobView(TabView):
         super().__init__(f, self.job_action)
         self._condor = cdr
         self.act_opt = ipywidgets.Dropdown(
-                options=('Hold','Remove','Release','Vacate'), value='Hold',
+                options=('Suspend','Continue','Hold','Release','Remove'), value='Suspend',
                 description='Action:', disabled=False,
             )
 
