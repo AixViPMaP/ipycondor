@@ -3,6 +3,7 @@
 from __future__ import print_function
 from six import string_types
 import copy, re
+import classad
 
 def _naturalsize(value, scale=1):
     try:
@@ -80,12 +81,15 @@ class BaseParser(object):
         value = copy.deepcopy(clsad.get(key, None))
         srule=self.__simple_rules.get(key.lower(), None)
         if srule:
-                value = _safe_call( srule, value , key , clsad)
-                if value:
-                    return value
+            value = _safe_call( srule, value , key , clsad)
+            if value: return value
         for pt, srule in self.__re_rules:
             if pt.match(key):
                 value = _safe_call( srule, value , key , clsad)
+                if value: return value
+        # No match
+        if type(value).__module__ == 'classad':
+            value = str(value)
         return value
 
 def _safe_call(f, *args):
