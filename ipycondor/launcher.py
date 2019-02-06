@@ -40,7 +40,7 @@ queue
     requirements = Unicode('', help='The requirements command in the job description file',config=True)
     environments = Unicode('', help='The environment command in the job description file', config=True)
     exec_cmd     = Unicode('ipengine_launcher',config=True)
-    name_pre = Unicode('ipcontroller')
+
     ssh_to_job_proc = Any()
     context_keys = Unicode('requirements,environments,exec_cmd,name_pre', config=True)
 
@@ -54,20 +54,28 @@ queue
         if v=='' or re.match('\s*\w+\s*=', v):
             return v
         raise TraitError('classad syntax error with %s'%v)
-    @observe('cluster_id')
-    def _observe_cluster_id(self, change):
-        v=change['new']
-        if v:
-            self.name_pre='ipcontroller-%s' % v
+
+    @property
+    def ipcontroller_info(self):
+        return os.path.join(self.profile_dir, 'security', self.name_pre+'-engine.json' )
+
+    @property
+    def name_pre(self):
+        return 'ipcontroller-%s' % self.cluster_id if self.cluster_id else 'ipcontroller'
+
 
     def start(self, n):
+
         prefix=lambda a,b: (a+b) if b else ''
         self.context['proxy'] = prefix( 'x509UserProxy=', os.environ.get('X509_USER_PROXY') )
         for k in self.context_keys.split(','):    self.context[k] = getattr(self,k)
-        _to_send = [ os.path.join(self.profile_dir, 'security', self.name_pre+'-engine.json' ) ] + self.to_send
-        assert all([os.path.exists(x) for x in _to_send]),'One or more files do not exist\n%s'%_to_send
-        self.context['to_send'] = ','.join( _to_send )
+        cl_info = self.ipcontroller_info
+        to_send = [ cl_info ] + self.to_send
+        self.context['to_send'] = ','.join( to_send )
         self.log.debug("Submitting condor job with context %s", self.context)
+
+        assert wait_for_new_file(cl_info), "File not found or too old %s"%cl_info
+        assert all([os.path.exists(x) for x in to_send]),'One or more input file(s) do not exist\n%s'%to_send
 
         # call parent method
         ans = super().start(n)
@@ -104,7 +112,7 @@ queue
         return val
 
     def create_tunnel(self):
-        with open(os.path.join(self.profile_dir, 'security', self.name_pre+'-engine.json'), 'r') as f:
+        with open(self.ipcontroller_info, 'r') as f:
             stat_engine=json.load( f )
 
         args=['condor_ssh_to_job', str(self.job_id), '-N']
@@ -126,3 +134,14 @@ queue
             self.log.info('`condor_ssh_to_job` %s exited with %s: %s',p.pid, p.poll(), out)
 
         self.on_stop(stop_ssh_tunnel) # register as a callback (triggered by `notify_stop`)
+
+def wait_for_new_file(filename, timeout=20):
+    for i in range(timeout):
+        try:
+            fileage = time.time() - os.stat(filename).st_mtime
+            if ( fileage<timeout and fileage>0 ):
+                return True
+        except FileNotFoundError:
+            time.sleep(1)
+    return False
+
