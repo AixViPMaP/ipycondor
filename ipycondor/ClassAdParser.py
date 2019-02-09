@@ -3,7 +3,6 @@
 from __future__ import print_function
 from six import string_types
 import copy, re
-import classad
 
 def _naturalsize(value, scale=1):
     try:
@@ -94,7 +93,7 @@ class BaseParser(object):
 
 def _safe_call(f, *args):
     import inspect
-    n = len(inspect.getargspec(f)[0])
+    n = len(inspect.getfullargspec(f).args) # support python>3.0
     args = args[:n]
     try:
         return f(*args)
@@ -133,15 +132,14 @@ class QueryParser(BaseParser):
         return value if value else clsad.get('LastRemoteHost','')
 
     @rule
-    def JobId(value, key, classad):
-        return classad.get('GlobalJobId', '').split('#')[1]
+    def JobId(value, key, clsad):
+        return clsad.get('GlobalJobId', '').split('#')[1]
 
     @rule
-    def ExitStatus(value, key, classad):
-        if classad.get('CompletionDate','') > 0:
+    def ExitStatus(value, key, clsad):
+        if clsad.get('CompletionDate','') > 0:
             return value
-        else:
-            return None
+        return None
 
     @rule(r'\w*(Memory)$')
     def mbyte2human(value):
