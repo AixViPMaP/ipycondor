@@ -2,8 +2,7 @@
 
 from .Condor import Condor, htcondor, TabView, CondorMagics
 import re
-from IPython.core.magic import (Magics, magics_class, line_magic,
-                                cell_magic, line_cell_magic)
+
 
 class AixViPMaP(Condor):
     def __init__(self, *args):
@@ -12,6 +11,7 @@ class AixViPMaP(Condor):
                               ("Machines", self.machine_table),
                               ("Apps", self.app_table)]
     def apps(self, constraint=None):
+        " Get APP info from `APP_*` attributes of all machines "
         # the argument `constrain` is ignored
         constraint='SlotID==1||SlotID=="1_1"'
         machines = self.coll.query(htcondor.AdTypes.Startd, constraint=constraint)
@@ -20,16 +20,17 @@ class AixViPMaP(Condor):
             for keyword in machine:
                 app = re.compile("APP_(.*)_VER_(.*)").match(keyword)
                 if app and len(app.groups()) == 2:
-                        apps.append((app.groups()[0].replace('_', ' '),
-                                     app.groups()[1].replace('_', '.'),
-                                     machine['Machine']))
+                    apps.append((app.groups()[0].replace('_', ' '),
+                                 app.groups()[1].replace('_', '.'),
+                                 machine['Machine']))
         return [ dict(zip(['App', 'Version', 'Machine'], a)) for a in set(apps) ]
 
     def app_table(self):
+        " Table for APPs "
         return TabView(self._wrap_tab_hdl(
             self.apps, None,
             ['App', 'Version', 'Machine'],
-            ['App', 'Version'])).root_widget
+            ['App', 'Version']), log=self.log).root_widget
 
 class AixVPMagic(CondorMagics):
     @property
