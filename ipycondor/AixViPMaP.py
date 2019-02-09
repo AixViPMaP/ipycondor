@@ -7,9 +7,7 @@ import re
 class AixViPMaP(Condor):
     def __init__(self, *args):
         super().__init__(*args)
-        self._table_layout = [("Jobs", self.job_table),
-                              ("Machines", self.machine_table),
-                              ("Apps", self.app_table)]
+        self._table_layout += [("Apps", self.app_table),]
     def apps(self, constraint=None):
         " Get APP info from `APP_*` attributes of all machines "
         # the argument `constrain` is ignored
