@@ -1,18 +1,18 @@
 # Copyright 2019 Mingxuan Lin
 # Copyright 2019 Lukas Koschmieder
 
-from __future__ import print_function
+import os, time, logging, re
+from subprocess import Popen, PIPE
+
 import htcondor
-from IPython.core.magic import (Magics, magics_class, line_magic,
-                                cell_magic, line_cell_magic)
 
-from .ClassAdParser import QueryParser
+from IPython.core.magic import (Magics, magics_class, line_magic, cell_magic)
+from IPython.display import display
 
-from IPython.display import display, clear_output
 import ipywidgets
 
-from subprocess import Popen, PIPE
-import os, time, logging, json
+from .ClassAdParser import QueryParser
+from .ipcluster import NbIPClusterStart
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -23,10 +23,9 @@ try:
     import pandas as pd
     import qgrid
 except ImportError as ierr:
-    logger.warning('Cannot import {s}\nSome functions may fail'.format(ierr))
+    logger.warning('Cannot import %s\nSome functions may fail',ierr)
 
 def my_job_id():
-    import re, os
     p = re.compile(r'ClusterId\s+=\s+(\d+)\n')
     try:
         cladname = os.environ['_CONDOR_JOB_AD']
@@ -35,7 +34,7 @@ def my_job_id():
                 m = p.match(line)
                 if m:
                     return int(m.group(1))
-            logger.error('Fail to find ClusterId attribute in file "%s"', cladname)
+            logger.error('Failed to find ClusterId attribute in file "%s"', cladname)
             return None
     except (IOError,KeyError) as err:
         logger.debug('%s\n\tJupyterlab is not started by HTCondor.', str(err))
@@ -47,7 +46,10 @@ def deep_parse(classAds, cols=None):
         data = [{c:parser.parse(j, c) for c in cols} for j in classAds]
     else:
         data = [{c:parser.parse(j, c) for c in j} for j in classAds]
-    return data
+    return data if len(data)>0 else None
+
+def lHBox (x):
+    return ipywidgets.HBox(x, layout={'justify_content':'flex-end'} )
 
 class TabView(object):
     def __init__(self, f, log=logger):
@@ -63,13 +65,13 @@ class TabView(object):
         refresh_btn.on_click(self.refresh)
         self.refresh_btn=refresh_btn
 
-    def refresh(self, *args):
+    def refresh(self, btn=None):
         try:
             self.grid_widget.df = self.f()
         except Exception as err:
-            self.log.error('Fail to refresh due to an error: %s', err)
+            self.log.error('Failed to refresh because %s', err)
 
-    def action(self, *args):
+    def action(self, btn=None):
         """ Callback for applying action on slected rows """
         df = self.grid_widget.get_selected_df()
         idxnames = df.index.names
@@ -83,7 +85,7 @@ class TabView(object):
     @property
     def root_widget(self):
         i=ipywidgets
-        return i.VBox([i.HBox( [self.refresh_btn],  layout=i.Layout(justify_content='flex-end') ), self.grid_widget])
+        return i.VBox([lHBox( [self.refresh_btn] ), self.grid_widget])
 
 class JobView(TabView):
     def __init__(self, f, cdr, **argv):
@@ -103,7 +105,7 @@ class JobView(TabView):
         try:
             self._condor.job_action(act, job_desc)
         except Exception as err:
-            self.log.error('Fail to apply action %s to job %s :\n\t%s',act, job_desc, err)
+            self.log.error('Failed to apply action %s to job %s :\n\t%s',act, job_desc, err)
         else:
             self.log.info('Successfully %s job %s', act, job_desc)
         self.refresh()
@@ -111,11 +113,65 @@ class JobView(TabView):
     @property
     def root_widget(self):
         i=ipywidgets
-        return i.VBox([i.HBox( [i.HBox(self.act_btn), self.refresh_btn  ] , layout=i.Layout(justify_content='flex-end') ),
+        return i.VBox([lHBox([i.HBox(self.act_btn), self.refresh_btn  ]),
                        self.grid_widget])
+
+
+class IpyclusterView(TabView):
+    def __init__(self, f, cdr, **argv):
+        super().__init__(f,**argv)
+        self._condor = cdr
+
+        self.exec_host_opt = ipywidgets.Dropdown(
+                options=tuple(set(m['Machine'] for m in cdr.machines())),
+                description='Remote host', disabled=False,
+            )
+        self.profile_opt = ipywidgets.Dropdown(
+                options=self.list_profiles(),
+                description='Profile', disabled=False,
+            )
+        self.n_opt = ipywidgets.IntText(2, description='No. engines',
+            layout={'width':'200px'})
+
+        self.act_btn = ipywidgets.Button( description='Start' )
+        self.act_btn.on_click(self.start)
+
+        self.stop_btn = ipywidgets.Button( description='Stop' )
+        self.stop_btn.on_click(self.stop)
+
+    def f_act(self, row_index):
+        pass
+
+    def start(self, btn):
+        try:
+            self._condor.start_ipcluster(self.profile_opt.value, self.n_opt.value, self.exec_host_opt.value)
+        except Exception as err:
+            self.log.error('Failed to start ipycluster with profile=%s because %s',self.profile_opt.value, err)
+
+    def stop(self, btn):
+        try:
+            self._condor.ipyclusters[self.profile_opt.value].stop_launchers()
+        except (KeyError, RuntimeError) as err:
+            self.log.error('Failed to shutdown the cluster because %s', err)
+
+    def list_profiles(self):
+        try:
+            from IPython.paths import get_ipython_dir
+            from IPython.core.profileapp import list_profiles_in
+        except ImportError as e:
+            self.log.info("IPython not available: %s", e)
+            return ['default',]
+        return list_profiles_in(get_ipython_dir())
+
+    @property
+    def root_widget(self):
+        i=ipywidgets
+        return i.VBox([lHBox( [ self.profile_opt, self.exec_host_opt,self.n_opt, self.refresh_btn]  ),
+                       lHBox([self.act_btn, self.stop_btn]), self.grid_widget])
 
 class TabPannel(object):
     _table_layout = tuple()
+    main_ui_pannel= None
     def __init__(self):
         self.log = logging.Logger(__name__ + '.TabPannel')
         self.log.setLevel(logging.INFO)
@@ -137,12 +193,8 @@ class TabPannel(object):
     def dashboard(self):
         c = getattr(self,'main_ui_pannel', None)
         if not c:
-            c = self.tabs()
-            self.main_ui_pannel = c
-
+            self.main_ui_pannel = c = self.tabs()
         display(ipywidgets.VBox([c, self.log_stack]))
-
-
 
 class Condor(TabPannel):
     def __init__(self, schedd_name=None):
@@ -154,8 +206,11 @@ class Condor(TabPannel):
         else:
             schedd_ad = self.coll.locate(htcondor.DaemonTypes.Schedd)
         self.schedd = htcondor.Schedd(schedd_ad)
-        self._table_layout = [("Jobs", self.job_table), ("Machines", self.machine_table)]
+        self._table_layout = [("Jobs", self.job_table),
+            ("Machines", self.machine_table),
+            ("IPyCluster", self.ipycluster_table)]
         self.my_job_id = my_job_id()
+        self.ipyclusters = {}
 
     def jobs(self, constraint=''):
         return self.schedd.query(constraint.encode())
@@ -175,44 +230,71 @@ class Condor(TabPannel):
         self.log.info("The job [%s] has been %sed", job_argv, act )
         return res
 
+    def start_ipcluster(self, profile, n, exec_host):
+        # Mimic: https://github.com/ipython/ipyparallel/blob/master/ipyparallel/nbextension/clustermanager.py
+        clusters = self.ipyclusters
+        starter  = clusters.get(profile,None)
+        if isinstance(starter, NbIPClusterStart):
+            if (starter.engine_launcher.running or
+                starter.controller_launcher.running):
+                self.log.warning('Cluster for profile %s is already running!', profile)
+                return
+        # Always create new starter because IPClusterApp is designed for CLI use case
+        clusters[profile] = starter = NbIPClusterStart(log=self.log)
+        starter.initialize(['--profile', profile, '--cluster-id', 'UI'])
+        self.log.info('Profile is loaded from %s with cluster-id=%s',
+                       starter.profile_dir.location, starter.cluster_id)
+
+        starter.engine_launcher.requirements = 'requirements = ( Machine == "%s" )' % exec_host
+        starter.start(int(n))
+
     @staticmethod
-    def _wrap_tab_hdl(classAds_hdl, constraint, cols, key_cols = [] ):
+    def _wrap_tab_hdl(classAds_hdl, constraint, cols, key_cols = tuple() ):
         columns = tuple(key_cols) + tuple(c for c in cols if c not in key_cols)
         # Create QGrid table widget
         def getdf():
+            indx = key_cols
             df = pd.DataFrame(deep_parse(classAds_hdl(constraint), columns), columns=columns)
-            if key_cols:
-                df = df.set_index(key_cols)
-                df = df.sort_index()
+            if len(df)==0:
+                indx = [indx[0],]
+            if indx:
+                df.set_index(list(indx),inplace=True)
+                df.sort_index(inplace=True)
             return df
         return getdf
 
     def job_table(self, constraint='',
-             columns=['ClusterID','ProcID','Owner','JobStatus',
-                      'JobStartDate','JobUniverse', 'RemoteHost'],
-             index=['ClusterID','ProcID']):
+             columns = ('ClusterID','ProcID','Owner','JobStatus',
+                      'JobStartDate','JobUniverse', 'RemoteHost'),
+             index = ('ClusterID','ProcID')):
         return JobView(self._wrap_tab_hdl(self.jobs,constraint, columns, index), self, log=self.log).root_widget
 
     def slot_table(self, constraint='',
-             columns=['Machine','SlotID','Activity','CPUs','Memory'],
-             index=['Machine','SlotID']):
+             columns = ('Machine','SlotID','Activity','CPUs','Memory'),
+             index = ('Machine','SlotID')):
         return TabView(self._wrap_tab_hdl(self.machines,constraint, columns, index), log=self.log).root_widget
 
 
     def machine_table(self,constraint='SlotID==1||SlotID=="1_1"',
-            columns=['Machine','TotalSlots','TotalCPUs','TotalMemory',
-                     'TotalDisk','TotalLoadAvg'],
-            index=['Machine']):
+            columns = ('Machine','TotalSlots','TotalCPUs','TotalMemory',
+                     'TotalDisk','TotalLoadAvg'),
+            index = ('Machine',)):
         return TabView(self._wrap_tab_hdl(self.machines,constraint, columns, index), log=self.log).root_widget
+
+    def ipycluster_table(self, constraint='ipengine_n > 0',
+             columns = ('ClusterID','ProcID','Owner','JobStatus',
+                      'JobStartDate','ipengine_n', 'RemoteHost'),
+             index = ('ClusterID','ProcID')):
+        return IpyclusterView(self._wrap_tab_hdl(self.jobs,constraint, columns, index), self, log=self.log).root_widget
 
 @magics_class
 class CondorMagics(Magics):
-
+    _condor = None
     @cell_magic
-    def CondorJob(self, line, cell):
+    def CondorJob(self, line, cell): #pylint: disable=W0201
         "Creation of a condor job"
-        username=os.environ.get('JUPYTERHUB_USER', os.environ.get('USER'))
-        p=Popen( [ 'condor_submit' ] , stdin=PIPE,stdout=PIPE, stderr=PIPE)
+        # username = os.environ.get('JUPYTERHUB_USER', os.environ.get('USER'))
+        p = Popen( [ 'condor_submit' ] , stdin=PIPE,stdout=PIPE, stderr=PIPE)
         out,err = p.communicate(cell.encode('utf-8'))
         out=out.decode('utf-8','replace')
         err=err.decode('utf-8','replace')
