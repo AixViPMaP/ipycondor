@@ -1,7 +1,5 @@
 # Copyright 2019 Mingxuan Lin
-
-from __future__ import print_function
-from six import string_types
+" Parsers for ClassAd objects "
 import copy, re
 
 def _naturalsize(value, scale=1):
@@ -23,7 +21,7 @@ def rule(x, plain=False):
 
     """
     pt = None
-    if isinstance(x, string_types):
+    if isinstance(x, str):
         if plain:
             pt = x
         else:
@@ -61,7 +59,7 @@ class BaseParser(object):
             func = getattr(cls, n)
             if getattr(func, '_meta_type',None) != "parser_rule": continue
             pattern = getattr(func, 'pattern', None)
-            if isinstance(pattern, string_types):
+            if isinstance(pattern, str):
                 cls.__simple_rules[pattern.lower()]=func
             else:
                 cls.__re_rules.append([pattern, func])
@@ -80,17 +78,20 @@ class BaseParser(object):
         value = copy.deepcopy(clsad.get(key, None))
         srule=self.__simple_rules.get(key.lower(), None)
         if srule:
-                value = _safe_call( srule, value , key , clsad)
-                if value:
-                    return value
+            value = _safe_call( srule, value , key , clsad)
+            if value: return value
         for pt, srule in self.__re_rules:
             if pt.match(key):
                 value = _safe_call( srule, value , key , clsad)
+                if value: return value
+        # No match
+        if type(value).__module__ == 'classad':
+            value = str(value)
         return value
 
 def _safe_call(f, *args):
     import inspect
-    n = len(inspect.getargspec(f)[0])
+    n = len(inspect.getfullargspec(f).args) # support python>3.0
     args = args[:n]
     try:
         return f(*args)
@@ -129,15 +130,14 @@ class QueryParser(BaseParser):
         return value if value else clsad.get('LastRemoteHost','')
 
     @rule
-    def JobId(value, key, classad):
-        return classad.get('GlobalJobId', '').split('#')[1]
+    def JobId(value, key, clsad):
+        return clsad.get('GlobalJobId', '').split('#')[1]
 
     @rule
-    def ExitStatus(value, key, classad):
-        if classad.get('CompletionDate','') > 0:
+    def ExitStatus(value, key, clsad):
+        if clsad.get('CompletionDate','') > 0:
             return value
-        else:
-            return None
+        return None
 
     @rule(r'\w*(Memory)$')
     def mbyte2human(value):
