@@ -1,10 +1,12 @@
 # Copyright 2019 Mingxuan Lin
 # Copyright 2019 Lukas Koschmieder
 
-import os, time, logging, re
+import os, time, logging, re, datetime
 from subprocess import Popen, PIPE
 
 import htcondor
+
+from zmq.eventloop import ioloop
 
 from IPython.core.magic import (Magics, magics_class, line_magic, cell_magic)
 from IPython.display import display
@@ -21,6 +23,7 @@ logger.addHandler(ch)
 
 try:
     import pandas as pd
+    import numpy as np
     import qgrid
 except ImportError as ierr:
     logger.warning('Cannot import %s\nSome functions may fail',ierr)
@@ -52,24 +55,51 @@ def lHBox (x):
     return ipywidgets.HBox(x, layout={'justify_content':'flex-end'} )
 
 class TabView(object):
+    refresh_timer = None
     def __init__(self, f, log=logger):
         self.f   = f
         self.log = log
         self.grid_widget = qgrid.show_grid(f(),show_toolbar=False,
                                     grid_options={'editable':False,
-                                                  'minVisibleRows':8,
-                                                  'maxVisibleRows':10})
+                                                  'minVisibleRows':10,
+                                                  'maxVisibleRows':8})
 
-        refresh_btn = ipywidgets.Button(description='Refresh',
-            icon='refresh', button_style='')
-        refresh_btn.on_click(self.refresh)
+        refresh_btn = ipywidgets.ToggleButton(
+            value=False, description='Refresh', disabled=False,
+            button_style='', # 'success', 'info', 'warning', 'danger' or ''
+            tooltip='Auto refresh', icon='refresh'
+        )
+        refresh_btn.observe(self.refresh_btn_handler)
         self.refresh_btn=refresh_btn
 
-    def refresh(self, btn=None):
+        self.updated_at = ipywidgets.HTML( value='<i>%s</i>' % datetime.datetime.now(),
+          description='Updated at')
+
+    def refresh_btn_handler(self, evt):
+        btn = evt.owner
+        if not evt.type == 'change':
+            return
         try:
-            self.grid_widget.df = self.f()
+            assert isinstance(btn, ipywidgets.ToggleButton), 'Illegal usage of refresh_btn_handler'
+            if btn.value:
+                if self.refresh_timer is None:
+                    self.refresh_timer = ioloop.PeriodicCallback(self.refresh, 2000)
+                self.refresh_timer.start()
+            elif self.refresh_timer:
+                self.refresh_timer.stop()
         except Exception as err:
-            self.log.error('Failed to refresh because %s', err)
+            self.log.error('Failed switch on/off auto refresh because of %s', repr(err))
+
+    def refresh(self, evt=None):
+        try:
+            self.updated_at.value = '<i>%s</i>' % datetime.datetime.now()
+            df0 = self.grid_widget.df
+            df  = self.f()
+            if not np.array_equal(df0,df):
+                self.grid_widget.df = df
+                self.log.debug('Updating %s', type(self))
+        except Exception as err:
+            self.log.error('Failed to refresh because of %s', repr(err))
 
     def action(self, btn=None):
         """ Callback for applying action on slected rows """
@@ -85,7 +115,7 @@ class TabView(object):
     @property
     def root_widget(self):
         i=ipywidgets
-        return i.VBox([lHBox( [self.refresh_btn] ), self.grid_widget])
+        return i.VBox([lHBox( [self.refresh_btn] ), self.grid_widget,self.updated_at])
 
 class JobView(TabView):
     def __init__(self, f, cdr, **argv):
@@ -114,7 +144,7 @@ class JobView(TabView):
     def root_widget(self):
         i=ipywidgets
         return i.VBox([lHBox([i.HBox(self.act_btn), self.refresh_btn  ]),
-                       self.grid_widget])
+                       self.grid_widget,self.updated_at])
 
 
 class IpyclusterView(TabView):
@@ -167,7 +197,7 @@ class IpyclusterView(TabView):
     def root_widget(self):
         i=ipywidgets
         return i.VBox([lHBox( [ self.profile_opt, self.exec_host_opt,self.n_opt, self.refresh_btn]  ),
-                       lHBox([self.act_btn, self.stop_btn]), self.grid_widget])
+                       lHBox([self.act_btn, self.stop_btn]), self.grid_widget, self.updated_at])
 
 class TabPannel(object):
     _table_layout = tuple()
@@ -264,7 +294,7 @@ class Condor(TabPannel):
         return getdf
 
     def job_table(self, constraint='',
-             columns = ('ClusterID','ProcID','Owner','JobStatus',
+             columns = ('ClusterID','ProcID','Owner','JobStatus','JobDescription',
                       'JobStartDate','JobUniverse', 'RemoteHost'),
              index = ('ClusterID','ProcID')):
         return JobView(self._wrap_tab_hdl(self.jobs,constraint, columns, index), self, log=self.log).root_widget

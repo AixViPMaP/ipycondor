@@ -1,7 +1,5 @@
 # Copyright 2019 Mingxuan Lin
-
-from __future__ import print_function
-from six import string_types
+" Parsers for ClassAd objects "
 import copy, re
 
 def _naturalsize(value, scale=1):
@@ -23,7 +21,7 @@ def rule(x, plain=False):
 
     """
     pt = None
-    if isinstance(x, string_types):
+    if isinstance(x, str):
         if plain:
             pt = x
         else:
@@ -61,7 +59,7 @@ class BaseParser(object):
             func = getattr(cls, n)
             if getattr(func, '_meta_type',None) != "parser_rule": continue
             pattern = getattr(func, 'pattern', None)
-            if isinstance(pattern, string_types):
+            if isinstance(pattern, str):
                 cls.__simple_rules[pattern.lower()]=func
             else:
                 cls.__re_rules.append([pattern, func])

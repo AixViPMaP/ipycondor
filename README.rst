@@ -18,7 +18,7 @@ Configuration
 IPython
 -------
 
-For using the ``IPython`` magics, please insert the following line in the ipython config file ``ipython_config.py``.
+To load the ipython magics ``%%CondorJob`` and ``%CondorMon`` at startup, insert the following line in the ipython config file ``ipython_config.py``.
 
 .. code:: python
 
@@ -35,12 +35,12 @@ For using the condor launcher for ``IPClusterEngines`` , the ipcluster profile s
 .. code:: python
 
     c.IPClusterEngines.engine_launcher_class = 'ipycondor.launcher.HTCondorEngineSetSshLauncher'
+    c.IPClusterStart.controller_launcher_class = 'Local'
 
 2. Create a shell script and save it to ``<your_profile_dir>/ipengine_launcher``. Since this script will be executed on a remote node, modify it according to the environments of your computer cluster.
 
 .. code:: bash
     
-    export CONDA_DIR=/opt/conda
-    source "$CONDA_DIR/bin/activate"
-    "$@" 
+    source /opt/conda/bin/activate base
+    exec "$@" 
 
