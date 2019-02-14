@@ -95,7 +95,7 @@ class TabView(object):
             self.updated_at.value = '<i>%s</i>' % datetime.datetime.now()
             df0 = self.grid_widget.df
             df  = self.f()
-            if not np.array_equal(df0,df):
+            if not df0.equals(df):
                 self.grid_widget.df = df
                 self.log.debug('Updating %s', type(self))
         except Exception as err:
