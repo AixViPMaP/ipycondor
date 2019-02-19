@@ -143,10 +143,11 @@ queue
         self.ssh_to_job_proc = 'Creating'
         with open(self.ipcontroller_json_file, 'r') as f:
             stat_engine=json.load( f )
-
+        bind_addr = stat_engine['interface'].split('://')[1]
+        assert bind_addr.startswith('127.')
         args=['condor_ssh_to_job', str(self.job_id), '-N', '-v', '-o', "ExitOnForwardFailure yes"]
         for k in ("registration", "control", "mux", "hb_ping", "hb_pong", "task", "iopub" ):
-            args += ['-R', 'localhost:{0}:localhost:{0}'.format(stat_engine[k])]
+            args += ['-R', '{0}:{1}:{0}:{1}'.format(bind_addr, stat_engine[k])]
 
         p=subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.ssh_to_job_proc = p

@@ -122,8 +122,7 @@ class QueryParser(BaseParser):
         import datetime
         if isinstance(value, int) and value > 0:
             return datetime.datetime.fromtimestamp(value)
-        else:
-            return None
+        return None
 
     @rule
     def RemoteHost(value, k, clsad):

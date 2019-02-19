@@ -8,12 +8,26 @@ Users can submit, monitor and manage condor jobs with a graphical user interface
 Install
 *******
 
+With ``pip``
+------------
+
 .. code:: sh
 
+    $ pip install git+https://github.com/gdlmx/ipycondor.git
+
+Manually
+--------
+
+.. code:: sh
+
+    $ git clone https://github.com/gdlmx/ipycondor.git
+    $ cd ipycondor
     $ python setup.py install
 
 Configuration
-=============
+*************
+
+The `IPython configuration files <https://ipython.org/ipython-doc/3/config/intro.html>`_ are typically located in directory at ``~/.ipython/profile_<name>``, where ``<name>`` is the canonical name of the profile. The config files involved in the following steps should be found/created inside this directory.
 
 IPython
 -------
@@ -28,19 +42,25 @@ To load the ipython magics ``%%CondorJob`` and ``%CondorMon`` at startup, insert
 IPCluster
 ---------
 
-For using the condor launcher for ``IPClusterEngines`` , the ipcluster profile should be manually configurated: 
+To use the condor launcher for ``IPClusterEngines`` , the ipcluster profile should be manually configurated: 
 
-1. Insert the following line into ``<your_profile_dir>/ip_cluster_config.py``
+1. Insert the following line into ``ip_cluster_config.py``
 
 .. code:: python
 
     c.IPClusterEngines.engine_launcher_class = 'ipycondor.launcher.HTCondorEngineSetSshLauncher'
     c.IPClusterStart.controller_launcher_class = 'Local'
 
-2. Create a shell script and save it to ``<your_profile_dir>/ipengine_launcher``. Since this script will be executed on a remote node, modify it according to the environments of your computer cluster.
+2. Create a shell script and save it as "ipengine_launcher". 
 
 .. code:: bash
     
     source /opt/conda/bin/activate base
     exec "$@" 
 
+This script will be used as the ``executable`` for the condor job to launch ``ipengines`` on the execute node, modify it according to the environments of your computer cluster.
+
+Usage
+*****
+
+Please refer to the `example notebook <examples/ipycondor_usage.ipynb>`_ in the subdirectory "examples".

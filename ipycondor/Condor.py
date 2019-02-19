@@ -1,12 +1,10 @@
 # Copyright 2019 Mingxuan Lin
 # Copyright 2019 Lukas Koschmieder
 
-import os, time, logging, re, datetime
+import os, time, logging, re, datetime, asyncio
 from subprocess import Popen, PIPE
 
 import htcondor
-
-from zmq.eventloop import ioloop
 
 from IPython.core.magic import (Magics, magics_class, line_magic, cell_magic)
 from IPython.display import display
@@ -23,8 +21,8 @@ logger.addHandler(ch)
 
 try:
     import pandas as pd
-    import numpy as np
     import qgrid
+    from classad import ExprTree
 except ImportError as ierr:
     logger.warning('Cannot import %s\nSome functions may fail',ierr)
 
@@ -82,13 +80,19 @@ class TabView(object):
         try:
             assert isinstance(btn, ipywidgets.ToggleButton), 'Illegal usage of refresh_btn_handler'
             if btn.value:
-                if self.refresh_timer is None:
-                    self.refresh_timer = ioloop.PeriodicCallback(self.refresh, 2000)
-                self.refresh_timer.start()
-            elif self.refresh_timer:
-                self.refresh_timer.stop()
+                self.refreshing_id = self.refreshing_id + 1
+                asyncio.ensure_future(self.periodic_refresh(self.refreshing_id, 2))
         except Exception as err:
             self.log.error('Failed switch on/off auto refresh because of %s', repr(err))
+
+    refreshing_id=0
+    async def periodic_refresh(self, refreshing_id, delay=2):
+        try:
+            while self.refresh_btn.value and self.refreshing_id == refreshing_id:
+                self.refresh()
+                await asyncio.sleep(delay)
+        except:
+            self.refresh_btn.value = False
 
     def refresh(self, evt=None):
         try:
@@ -100,13 +104,14 @@ class TabView(object):
                 self.log.debug('Updating %s', type(self))
         except Exception as err:
             self.log.error('Failed to refresh because of %s', repr(err))
+            raise
 
     def action(self, btn=None):
         """ Callback for applying action on slected rows """
         df = self.grid_widget.get_selected_df()
-        idxnames = df.index.names
-        for idx in df.index:
-            self.f_act(dict(zip(idxnames, idx)))
+        idxframe = df.index.to_frame()
+        for i in range(len(df.index)):
+            self.f_act( idxframe.iloc[i,:].to_dict() )
 
     def f_act(self, row_index):
         """ Applying action on a row (called by self.action) """
@@ -252,11 +257,14 @@ class Condor(TabPannel):
     def job_action(self, act,  job_argv):
         if self.my_job_id and self.my_job_id == job_argv.get('ClusterID'):
             raise ValueError("This notebook is running in a condor job, which cannot kill itself!")
-        act_args = ' && '.join([ '{}=={}'.format(k,v)  for k,v in job_argv.items() ])
+        et = ExprTree('True')
+        for k,v in job_argv.items():
+            et = et.and_( ExprTree(k) == v )
+        act_args = str(et)
         res = self.schedd.act( getattr(htcondor.JobAction, act), act_args )
         if not res['TotalSuccess'] > 0:
             trimedres = {k:res[k] for k in res if res[k]>0}
-            raise RuntimeError("Action %s failed with error:%s"%(act, trimedres))
+            raise RuntimeError("Action %s with constraint %s failed with error:%s"%(act, act_args, trimedres))
         self.log.info("The job [%s] has been %sed", job_argv, act )
         return res
 
@@ -321,7 +329,7 @@ class Condor(TabPannel):
 class CondorMagics(Magics):
     _condor = None
     @cell_magic
-    def CondorJob(self, line, cell): #pylint: disable=W0201
+    def CondorJob(self, line, cell): #pylint: disable=R0201
         "Creation of a condor job"
         # username = os.environ.get('JUPYTERHUB_USER', os.environ.get('USER'))
         p = Popen( [ 'condor_submit' ] , stdin=PIPE,stdout=PIPE, stderr=PIPE)
